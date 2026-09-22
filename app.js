@@ -760,16 +760,17 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// 7. MAPPLS OFFICIAL AUTOCOMPLETE & SEARCH
+// 7. MAPPLS OFFICIAL SEARCH ENGINE
 // ==========================================
 const searchInput = document.getElementById('searchInput');
 const suggestionsBox = document.getElementById('searchSuggestions');
 
-// Mappls Official Search Plugin Initialization
-function setupMapplsSearch() {
+function initMapplsSearch() {
   if (window.mappls && window.mappls.search) {
+    // Mappls-er official autosuggest plugin
     new mappls.search(searchInput, {
-      location: [22.5726, 88.3639], // পশ্চিমবঙ্গ ও কলকাতার কেন্দ্রিক হাইপারলোকাল বায়াস
+      location: [22.5726, 88.3639], // West Bengal bias
+      region: "ind",
       hyperLocal: true
     }, function(data) {
       if (!data) return;
@@ -783,107 +784,21 @@ function setupMapplsSearch() {
         selectLocation(lat, lng, name, details);
       }
     });
+  } else {
+    setTimeout(initMapplsSearch, 500);
   }
 }
 
-// স্ক্রিপ্ট লোড হওয়া পর্যন্ত অপেক্ষা
-if (window.mappls) {
-  setupMapplsSearch();
+// Page load holei Mappls Search chalu hobe
+if (document.readyState === 'complete') {
+  initMapplsSearch();
 } else {
-  window.addEventListener('load', setupMapplsSearch);
-}
-
-// ইনপুট ইভেন্টে ভারতীয় ডেটাবেস সার্চ (Nominatim India + Photon Fallback)
-searchInput.addEventListener('input', (e) => {
-  const query = e.target.value.trim();
-  clearTimeout(debounceTimer);
-
-  if (query.length < 2) {
-    suggestionsBox.style.display = 'none';
-    suggestionsBox.innerHTML = '';
-    return;
-  }
-
-  debounceTimer = setTimeout(async () => {
-    try {
-      // ভারতের অফিসিয়াল লোকাল ডেটাবেস (BDO, Panchayat, Govt Office ইত্যাদি সহজে পাওয়ার জন্য)
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&countrycodes=in&limit=6`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-      const data = await res.json();
-
-      if (data && data.length > 0) {
-        renderCustomSuggestions(data);
-      } else {
-        fallbackPhotonSearch(query);
-      }
-    } catch (err) {
-      fallbackPhotonSearch(query);
-    }
-  }, 300);
-});
-
-async function fallbackPhotonSearch(query) {
-  try {
-    const center = map.getCenter();
-    const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${center.lat}&lon=${center.lng}&limit=6`);
-    const data = await res.json();
-    if (data && data.features && data.features.length > 0) {
-      renderPhotonSuggestions(data.features);
-    } else {
-      suggestionsBox.style.display = 'none';
-    }
-  } catch (e) {
-    suggestionsBox.style.display = 'none';
-  }
-}
-
-function renderCustomSuggestions(places) {
-  suggestionsBox.innerHTML = '';
-  places.forEach((item) => {
-    const name = item.name || item.display_name.split(',')[0];
-    const details = item.display_name.split(',').slice(1, 4).join(',').trim();
-    const lat = parseFloat(item.lat);
-    const lng = parseFloat(item.lon);
-
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <i class="${detectAutoIcon(name)}"></i>
-      <div class="suggestion-text">
-        <span class="suggestion-title">${name}</span>
-        <span class="suggestion-sub">${details}</span>
-      </div>
-    `;
-    li.onclick = () => selectLocation(lat, lng, name, details);
-    suggestionsBox.appendChild(li);
-  });
-  suggestionsBox.style.display = 'block';
-}
-
-function renderPhotonSuggestions(places) {
-  suggestionsBox.innerHTML = '';
-  places.forEach((item) => {
-    const props = item.properties;
-    const name = props.name || props.street || 'Unnamed Location';
-    const details = [props.district, props.city, props.state].filter(Boolean).join(', ');
-    const [lng, lat] = item.geometry.coordinates;
-
-    const li = document.createElement('li');
-    li.innerHTML = `
-      <i class="${detectAutoIcon(name)}"></i>
-      <div class="suggestion-text">
-        <span class="suggestion-title">${name}</span>
-        <span class="suggestion-sub">${details}</span>
-      </div>
-    `;
-    li.onclick = () => selectLocation(lat, lng, name, details);
-    suggestionsBox.appendChild(li);
-  });
-  suggestionsBox.style.display = 'block';
+  window.addEventListener('load', initMapplsSearch);
 }
 
 function selectLocation(lat, lng, name, details) {
   searchInput.value = name;
-  suggestionsBox.style.display = 'none';
+  if (suggestionsBox) suggestionsBox.style.display = 'none';
   map.flyTo([lat, lng], 15);
 
   if (tempSearchMarker) map.removeLayer(tempSearchMarker);
@@ -969,52 +884,6 @@ function renderTempMarkerWithPopup(lat, lng, name, details, selectedColor, selec
 
   tempSearchMarker.bindPopup(popupContent, { offset: [0, -10] }).openPopup();
 }
-
-window.changePopupSettings = function(safeDetails, lat, lng, newColor, newIcon) {
-  const currentNameVal = document.getElementById('popupLocNameInput') ? document.getElementById('popupLocNameInput').value : '';
-  currentSelectedColor = newColor;
-  currentSelectedIcon = newIcon;
-  renderTempMarkerWithPopup(lat, lng, currentNameVal, decodeURIComponent(safeDetails), newColor, newIcon);
-};
-
-window.confirmAddFromPopup = async function(lat, lng, type, chosenColor, chosenIcon) {
-  const inputEl = document.getElementById('popupLocNameInput');
-  const finalName = (inputEl && inputEl.value.trim() !== '') ? inputEl.value.trim() : "Unnamed Location";
-
-  if (tempSearchMarker) {
-    map.removeLayer(tempSearchMarker);
-    tempSearchMarker = null;
-  }
-
-  if (type === 'hub') {
-    originPoint = { name: finalName, lat, lng, labelDir: 'right' };
-    destinations.forEach(d => { delete d.route; delete d.badgeLatLng; });
-    persistData();
-    setupOrigin();
-    renderAllDestinations();
-  } else {
-    const newDest = {
-      id: generateUniqueId(),
-      name: finalName,
-      lat: lat,
-      lng: lng,
-      color: chosenColor || getNextUniqueColor(),
-      icon: chosenIcon || detectAutoIcon(finalName),
-      labelDir: 'right'
-    };
-    destinations.push(newDest);
-    persistData();
-    
-    await renderSingleDestination(newDest);
-    updateSummaryStats();
-  }
-};
-
-document.addEventListener('click', (e) => {
-  if (!document.querySelector('.search-container').contains(e.target)) {
-    suggestionsBox.style.display = 'none';
-  }
-});
 
 // ==========================================
 // 8. PANEL & SIDEBAR RESIZERS
