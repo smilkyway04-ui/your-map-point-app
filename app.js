@@ -1,10 +1,11 @@
 // ==========================================
 // 1. DATA STORE, 12 COLORS & ICONS
 // ==========================================
+const MAPPLS_KEY = "mvurtbbkrmltvdcpnblczfijpxtwmzqkhpmz"; // এখানে আপনার Mappls Web App Key বসান
+
 let originPoint = JSON.parse(localStorage.getItem('mp_origin')) || null;
 let destinations = JSON.parse(localStorage.getItem('mp_destinations')) || [];
 
-// Prottek destination-er unique id ensure kora
 destinations.forEach((d, idx) => {
   if (!d.id) d.id = 'loc_' + Date.now() + '_' + idx;
 });
@@ -18,7 +19,6 @@ let activePaletteDestId = null;
 let currentSelectedColor = null;
 let currentSelectedIcon = null;
 
-// Individual Leaflet Layers Registry
 const destLayers = {}; 
 const originLayers = { pinMarker: null, labelMarker: null };
 
@@ -27,18 +27,9 @@ function generateUniqueId() {
 }
 
 const PRESET_12_COLORS = [
-  "#2563eb", // 1. Royal Blue
-  "#dc2626", // 2. Crimson Red
-  "#16a34a", // 3. Leaf Green
-  "#f59e0b", // 4. Amber Yellow
-  "#9333ea", // 5. Vivid Purple
-  "#06b6d4", // 6. Cyan Sky
-  "#e11d48", // 7. Rose Pink
-  "#ea580c", // 8. Deep Orange
-  "#4f46e5", // 9. Indigo
-  "#059669", // 10. Emerald Teal
-  "#ca8a04", // 11. Mustard Gold
-  "#db2777"  // 12. Magenta Pink
+  "#2563eb", "#dc2626", "#16a34a", "#f59e0b", 
+  "#9333ea", "#06b6d4", "#e11d48", "#ea580c", 
+  "#4f46e5", "#059669", "#ca8a04", "#db2777"
 ];
 
 const AVAILABLE_ICONS = [
@@ -92,18 +83,9 @@ function persistData() {
 }
 
 // ==========================================
-// 2. MAP INITIALIZATION (WITH AUTO-FALLBACK)
+// 2. MAP INITIALIZATION (MAPPLS OFFICIAL TILES)
 // ==========================================
-const MAPPLS_KEY = "mvurtbbkrmltvdcpnblczfijpxtwmzqkhpmz";
-
-// ১. নির্ভরযোগ্য ব্যাকআপ লেয়ার (যাতে ম্যাপ কখনোই সাদা/ধূসর না হয়)
-const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19,
-  attribution: '© OpenStreetMap contributors'
-});
-
-// ২. Mappls টাইল লেয়ার
-const mapplsLayer = L.tileLayer(`https://apis.mappls.com/advancedmaps/v1/${MAPPLS_KEY}/raster_tile/{z}/{x}/{y}.png`, {
+const streetLayer = L.tileLayer(`https://apis.mappls.com/advancedmaps/v1/${MAPPLS_KEY}/raster_tile/{z}/{x}/{y}.png`, {
   maxZoom: 19,
   attribution: '© Mappls | MapmyIndia'
 });
@@ -113,32 +95,28 @@ const satLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/servic
   attribution: 'Tiles &copy; Esri'
 });
 
-// ম্যাপ তৈরি
 const map = L.map('map', {
   center: originPoint ? [originPoint.lat, originPoint.lng] : [22.5726, 88.3639],
   zoom: 13,
-  layers: [osmLayer] // প্রথমে বেস লেয়ার নিশ্চিত থাকবে
+  layers: [streetLayer]
 });
 
-// যদি Mappls কী সক্রিয় থাকে, তবেই স্বয়ংক্রিয়ভাবে Mappls লেয়ার যোগ হবে
-try {
-  mapplsLayer.addTo(map);
-  mapplsLayer.on('tileerror', function() {
-    console.warn("Mappls tile loading failed (Authentication/Domain restriction). Reverting to standard map.");
-    map.removeLayer(mapplsLayer);
-  });
-} catch (e) {
-  console.warn("Mappls init error:", e);
-}
+// ব্যাকআপ সুরক্ষা: ডোমেন বা নেটওয়ার্কে সমস্যা হলে ম্যাপ ব্ল্যাঙ্ক না হয়ে ব্যাকআপ লেয়ারে আসবে
+streetLayer.on('tileerror', function() {
+  console.warn("Mappls tile loading failed. Reverting to backup map.");
+  if (!map.hasLayer(satLayer)) {
+    L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', { maxZoom: 20 }).addTo(map);
+  }
+});
 
 const originLayerGroup = L.layerGroup().addTo(map);
 const destMarkerGroup = L.layerGroup().addTo(map);
 const routePolylineGroup = L.layerGroup().addTo(map);
 const routeBadgeGroup = L.layerGroup().addTo(map);
 
-// =========================================================
-// 3. ICONS BUILDERS
-// =========================================================
+// ==========================================
+// 3. ICONS & BADGES
+// ==========================================
 function createPinIcon(color, iconClass) {
   return L.divIcon({
     className: 'custom-pin-head-only',
@@ -156,7 +134,7 @@ function createLocationLabelIcon(name, lat, lng, color, dir = 'right') {
   return L.divIcon({
     className: 'loc-label-container',
     html: `
-      <div class="loc-name-bubble dir-${dir}" title="Drag with mouse to rotate around pin">
+      <div class="loc-name-bubble dir-${dir}" title="Drag with mouse to rotate">
         <div class="loc-bubble-arrow"></div>
         <strong style="display:flex; align-items:center; gap:5px;">
           <span style="width:7px; height:7px; border-radius:50%; background-color:${color}; display:inline-block; flex-shrink:0;"></span>
@@ -202,7 +180,6 @@ function createBadgeIcon(km, min, color, dir = 'bottom') {
   });
 }
 
-// Polyline Snapping
 function getClosestPointOnPolyline(dragLatLng, polyCoords) {
   if (!polyCoords || polyCoords.length === 0) return { latLng: dragLatLng, defaultDir: 'bottom' };
   if (polyCoords.length === 1) return { latLng: L.latLng(polyCoords[0][0], polyCoords[0][1]), defaultDir: 'bottom' };
@@ -253,7 +230,6 @@ function getClosestPointOnPolyline(dragLatLng, polyCoords) {
 // ==========================================
 function setupOrigin() {
   originLayerGroup.clearLayers();
-
   const nameContainer = document.getElementById('sidebarOriginName');
 
   if (!originPoint) {
@@ -266,12 +242,10 @@ function setupOrigin() {
 
   nameContainer.innerHTML = `<span>${originPoint.name}</span>`;
 
-  // Origin Pin
   originLayers.pinMarker = L.marker([originPoint.lat, originPoint.lng], {
     icon: createPinIcon('#ef4444', 'fa-solid fa-star')
   }).addTo(originLayerGroup);
 
-  // Origin Label Card
   let originDir = originPoint.labelDir || 'right';
   originLayers.labelMarker = L.marker([originPoint.lat, originPoint.lng], {
     icon: createLocationLabelIcon(originPoint.name, originPoint.lat, originPoint.lng, '#ef4444', originDir),
@@ -305,9 +279,9 @@ function setupOrigin() {
   document.getElementById('summaryOriginCoords').innerText = `${originPoint.lat.toFixed(4)}, ${originPoint.lng.toFixed(4)}`;
 }
 
-// =========================================================
-// 5. CACHED ROUTING & SINGLE DESTINATION RENDERING
-// =========================================================
+// ==========================================
+// 5. CACHED ROUTING & SINGLE DESTINATION
+// ==========================================
 async function getOrFetchRoute(origin, dest) {
   if (dest.route && dest.route.coords && dest.route.coords.length > 0) {
     return dest.route;
@@ -414,7 +388,6 @@ async function renderSingleDestination(dest) {
     card.innerHTML = cardInnerHtml;
   }
 
-  // Map Pin
   if (destLayers[id] && destLayers[id].pinMarker) {
     destMarkerGroup.removeLayer(destLayers[id].pinMarker);
   }
@@ -422,7 +395,6 @@ async function renderSingleDestination(dest) {
     icon: createPinIcon(dest.color, dest.icon)
   }).addTo(destMarkerGroup);
 
-  // Map Label Card
   if (destLayers[id] && destLayers[id].labelMarker) {
     destMarkerGroup.removeLayer(destLayers[id].labelMarker);
   }
@@ -456,7 +428,6 @@ async function renderSingleDestination(dest) {
 
   destLayers[id] = { pinMarker, labelMarker, polyline: null, badgeMarker: null };
 
-  // Routes and Badges
   if (originPoint) {
     const route = await getOrFetchRoute(originPoint, dest);
 
@@ -578,12 +549,11 @@ function updateSummaryStats() {
   }
 }
 
-// =========================================================
+// ==========================================
 // 6. ISOLATED MUTATIONS
-// =========================================================
+// ==========================================
 window.deleteDestination = function(id) {
   id = String(id);
-
   if (destLayers[id]) {
     if (destLayers[id].pinMarker) destMarkerGroup.removeLayer(destLayers[id].pinMarker);
     if (destLayers[id].labelMarker) destMarkerGroup.removeLayer(destLayers[id].labelMarker);
@@ -790,11 +760,40 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// 7. AUTOCOMPLETE & POPUP
+// 7. MAPPLS OFFICIAL AUTOCOMPLETE & SEARCH
 // ==========================================
 const searchInput = document.getElementById('searchInput');
 const suggestionsBox = document.getElementById('searchSuggestions');
 
+// Mappls Official Search Plugin Initialization
+function setupMapplsSearch() {
+  if (window.mappls && window.mappls.search) {
+    new mappls.search(searchInput, {
+      location: [22.5726, 88.3639], // পশ্চিমবঙ্গ ও কলকাতার কেন্দ্রিক হাইপারলোকাল বায়াস
+      hyperLocal: true
+    }, function(data) {
+      if (!data) return;
+      const place = Array.isArray(data) ? data[0] : data;
+      const lat = parseFloat(place.latitude || place.entryLatitude);
+      const lng = parseFloat(place.longitude || place.entryLongitude);
+      const name = place.placeName || place.poi || place.name || "Budge Budge 2 BDO";
+      const details = place.placeAddress || place.formattedAddress || "";
+
+      if (!isNaN(lat) && !isNaN(lng)) {
+        selectLocation(lat, lng, name, details);
+      }
+    });
+  }
+}
+
+// স্ক্রিপ্ট লোড হওয়া পর্যন্ত অপেক্ষা
+if (window.mappls) {
+  setupMapplsSearch();
+} else {
+  window.addEventListener('load', setupMapplsSearch);
+}
+
+// ইনপুট ইভেন্টে ভারতীয় ডেটাবেস সার্চ (Nominatim India + Photon Fallback)
 searchInput.addEventListener('input', (e) => {
   const query = e.target.value.trim();
   clearTimeout(debounceTimer);
@@ -807,24 +806,61 @@ searchInput.addEventListener('input', (e) => {
 
   debounceTimer = setTimeout(async () => {
     try {
-      const center = map.getCenter();
-      const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${center.lat}&lon=${center.lng}&limit=6`);
+      // ভারতের অফিসিয়াল লোকাল ডেটাবেস (BDO, Panchayat, Govt Office ইত্যাদি সহজে পাওয়ার জন্য)
+      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&countrycodes=in&limit=6`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
       const data = await res.json();
 
-      if (data && data.features && data.features.length > 0) {
-        renderSuggestions(data.features);
+      if (data && data.length > 0) {
+        renderCustomSuggestions(data);
       } else {
-        suggestionsBox.style.display = 'none';
+        fallbackPhotonSearch(query);
       }
     } catch (err) {
-      console.error("Autocomplete error:", err);
+      fallbackPhotonSearch(query);
     }
-  }, 250);
+  }, 300);
 });
 
-function renderSuggestions(places) {
-  suggestionsBox.innerHTML = '';
+async function fallbackPhotonSearch(query) {
+  try {
+    const center = map.getCenter();
+    const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${center.lat}&lon=${center.lng}&limit=6`);
+    const data = await res.json();
+    if (data && data.features && data.features.length > 0) {
+      renderPhotonSuggestions(data.features);
+    } else {
+      suggestionsBox.style.display = 'none';
+    }
+  } catch (e) {
+    suggestionsBox.style.display = 'none';
+  }
+}
 
+function renderCustomSuggestions(places) {
+  suggestionsBox.innerHTML = '';
+  places.forEach((item) => {
+    const name = item.name || item.display_name.split(',')[0];
+    const details = item.display_name.split(',').slice(1, 4).join(',').trim();
+    const lat = parseFloat(item.lat);
+    const lng = parseFloat(item.lon);
+
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <i class="${detectAutoIcon(name)}"></i>
+      <div class="suggestion-text">
+        <span class="suggestion-title">${name}</span>
+        <span class="suggestion-sub">${details}</span>
+      </div>
+    `;
+    li.onclick = () => selectLocation(lat, lng, name, details);
+    suggestionsBox.appendChild(li);
+  });
+  suggestionsBox.style.display = 'block';
+}
+
+function renderPhotonSuggestions(places) {
+  suggestionsBox.innerHTML = '';
   places.forEach((item) => {
     const props = item.properties;
     const name = props.name || props.street || 'Unnamed Location';
@@ -836,14 +872,12 @@ function renderSuggestions(places) {
       <i class="${detectAutoIcon(name)}"></i>
       <div class="suggestion-text">
         <span class="suggestion-title">${name}</span>
-        <span class="suggestion-sub">${details || Number(lat).toFixed(3) + ', ' + Number(lng).toFixed(3)}</span>
+        <span class="suggestion-sub">${details}</span>
       </div>
     `;
-
     li.onclick = () => selectLocation(lat, lng, name, details);
     suggestionsBox.appendChild(li);
   });
-
   suggestionsBox.style.display = 'block';
 }
 
@@ -982,9 +1016,9 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// =========================================================
+// ==========================================
 // 8. PANEL & SIDEBAR RESIZERS
-// =========================================================
+// ==========================================
 const sidebarEl = document.querySelector('.sidebar');
 const resizerSidebar = document.getElementById('resizerSidebar');
 let isResizingSidebar = false;
