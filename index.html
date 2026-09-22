@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Map Pointing - Distance & Route Dashboard</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  <!-- Mappls Web Map SDK -->
+  <script src="https://apis.mappls.com/advancedmaps/api/tczpohcgxoqblybwzhoayftatwfgcxrdhsbr/map_sdk.js"></script>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <header class="topbar">
+    <div class="brand">
+      <i class="fa-solid fa-location-dot"></i>
+      <span>Map Pointing</span>
+    </div>
+    
+    <!-- Search Bar with Live Suggestion Dropdown -->
+    <div class="search-container">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" id="searchInput" placeholder="Search places, addresses or coordinates..." autocomplete="off" />
+      <ul id="searchSuggestions" class="suggestions-list"></ul>
+    </div>
+
+    <div class="topbar-actions">
+      <button class="icon-btn" title="Map Layers"><i class="fa-solid fa-map"></i></button>
+      <div class="user-avatar"><i class="fa-solid fa-user"></i></div>
+    </div>
+  </header>
+
+  <!-- Main App Shell -->
+  <main class="app-body">
+    
+    <!-- Left Sidebar (Resizable Width) -->
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <div class="section-title">
+          <span>My Map</span>
+          <i class="fa-solid fa-chevron-down"></i>
+        </div>
+        <p class="subtitle">My Places • Hub & Spoke Routing</p>
+      </div>
+
+      <!-- Layers -->
+      <div class="sidebar-section layers-section">
+        <div class="section-heading">
+          <span>LAYERS</span>
+          <i class="fa-solid fa-layer-group"></i>
+        </div>
+
+        <!-- Fixed Origin Hub -->
+        <div class="layer-card origin-card" id="originCard">
+          <div class="layer-info">
+            <span class="hub-dot"></span>
+            <div class="layer-text-wrap">
+              <strong id="sidebarOriginName">Click map to set Hub</strong>
+              <small id="sidebarOriginStatus">Fixed origin (Not set)</small>
+            </div>
+          </div>
+          <i class="fa-solid fa-lock" title="Fixed Central Location"></i>
+        </div>
+
+        <!-- Dynamic Destinations List -->
+        <div id="destinationsList"></div>
+
+        <button class="add-loc-btn" id="btnAddLocation">
+          <i class="fa-solid fa-plus"></i> Add location
+        </button>
+      </div>
+
+      <!-- Route Controls -->
+      <div class="sidebar-section">
+        <div class="section-heading">
+          <span>PLAN YOUR ROUTE</span>
+          <i class="fa-solid fa-route"></i>
+        </div>
+        <div class="toggle-control">
+          <span>Show all routes</span>
+          <input type="checkbox" id="toggleRoutes" checked />
+        </div>
+        <div class="toggle-control">
+          <span>Show distance labels</span>
+          <input type="checkbox" id="toggleLabels" checked />
+        </div>
+      </div>
+    </aside>
+
+    <!-- Sidebar Horizontal Resizer Handle -->
+    <div class="resizer-sidebar" id="resizerSidebar" title="Drag left/right to resize sidebar width"></div>
+
+    <!-- Center Map Viewport -->
+    <section class="map-viewport">
+      
+      <!-- Floating Toolbar -->
+      <div class="map-toolbar">
+        <button class="tool-btn active" id="toolPan" title="Pan"><i class="fa-solid fa-hand"></i></button>
+        <button class="tool-btn" id="toolAddPin" title="Add Pin on Map"><i class="fa-solid fa-location-crosshairs"></i></button>
+      </div>
+
+      <!-- Map/Satellite Switcher -->
+      <div class="map-switcher">
+        <button class="switch-btn active" id="btnMap">Map</button>
+        <button class="switch-btn" id="btnSatellite">Satellite</button>
+      </div>
+
+      <!-- Leaflet Map Container -->
+      <div id="map"></div>
+
+      <!-- Bottom Panel: Distances & Analytics (Resizable Height) -->
+      <footer class="bottom-panel">
+        <div class="resizer-bottom" id="resizerBottom" title="Drag up/down to resize panel height">
+          <span class="resizer-handle-pill"></span>
+        </div>
+
+        <div class="panel-table-wrap">
+          <div class="table-header-title">
+            <i class="fa-solid fa-arrows-split-up-and-left"></i>
+            <h3>Distances & Routes</h3>
+          </div>
+          <table class="route-table">
+            <thead>
+              <tr>
+                <th>From (Fixed Origin)</th>
+                <th>To</th>
+                <th>Distance</th>
+                <th>Estimated Time</th>
+                <th>Route</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="routeTableBody"></tbody>
+          </table>
+        </div>
+
+        <!-- Summary Status Box -->
+        <div class="summary-box">
+          <div class="summary-header">
+            <i class="fa-solid fa-location-dot"></i>
+            <div>
+              <strong id="summaryOriginTitle">No Origin Set</strong>
+              <small id="summaryOriginCoords">Set hub to start</small>
+            </div>
+          </div>
+
+          <div class="stat-rows">
+            <div class="stat-row"><span>Total Locations</span> <strong id="statTotalLoc">0</strong></div>
+            <div class="stat-row"><span>Total Routes</span> <strong id="statTotalRoutes">0</strong></div>
+            <div class="stat-row"><span>Farthest Distance</span> <strong id="statFarthest">0 km</strong></div>
+            <div class="stat-row"><span>Shortest Distance</span> <strong id="statShortest">0 km</strong></div>
+          </div>
+
+          <div class="summary-buttons">
+            <button class="btn-clear" id="btnClearAll"><i class="fa-solid fa-trash-can"></i> Clear All</button>
+            <button class="btn-export" id="btnExport"><i class="fa-solid fa-download"></i> Export</button>
+          </div>
+        </div>
+      </footer>
+    </section>
+  </main>
+
+  <!-- Leaflet JS & App Script -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
