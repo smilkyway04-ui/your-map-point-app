@@ -760,131 +760,110 @@ document.addEventListener('click', (e) => {
 });
 
 // ==========================================
-// 7. MAPPLS OFFICIAL SEARCH ENGINE
+// 7. DIRECT SEARCH (INDIA GOVT & LOCAL POI)
 // ==========================================
 const searchInput = document.getElementById('searchInput');
 const suggestionsBox = document.getElementById('searchSuggestions');
 
-function initMapplsSearch() {
-  if (window.mappls && window.mappls.search) {
-    // Mappls-er official autosuggest plugin
-    new mappls.search(searchInput, {
-      location: [22.5726, 88.3639], // West Bengal bias
-      region: "ind",
-      hyperLocal: true
-    }, function(data) {
-      if (!data) return;
-      const place = Array.isArray(data) ? data[0] : data;
-      const lat = parseFloat(place.latitude || place.entryLatitude);
-      const lng = parseFloat(place.longitude || place.entryLongitude);
-      const name = place.placeName || place.poi || place.name || "Budge Budge 2 BDO";
-      const details = place.placeAddress || place.formattedAddress || "";
+searchInput.addEventListener('input', (e) => {
+  const query = e.target.value.trim();
+  clearTimeout(debounceTimer);
 
-      if (!isNaN(lat) && !isNaN(lng)) {
-        selectLocation(lat, lng, name, details);
-      }
-    });
-  } else {
-    setTimeout(initMapplsSearch, 500);
+  if (query.length < 2) {
+    suggestionsBox.style.display = 'none';
+    suggestionsBox.innerHTML = '';
+    return;
   }
-}
 
-// Page load holei Mappls Search chalu hobe
-if (document.readyState === 'complete') {
-  initMapplsSearch();
-} else {
-  window.addEventListener('load', initMapplsSearch);
-}
+  debounceTimer = setTimeout(async () => {
+    // সার্চ টার্ম পরিষ্কার করা (2 থাকলে II দিয়েও চেক করা)
+    let searchTerms = [query];
+    if (/\b2\b/.test(query)) {
+      searchTerms.push(query.replace(/\b2\b/g, 'II'));
+    }
 
-function selectLocation(lat, lng, name, details) {
-  searchInput.value = name;
-  if (suggestionsBox) suggestionsBox.style.display = 'none';
-  map.flyTo([lat, lng], 15);
+    let foundPlaces = [];
 
-  if (tempSearchMarker) map.removeLayer(tempSearchMarker);
+    for (let term of searchTerms) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(term + ' West Bengal')}&format=json&addressdetails=1&countrycodes=in&limit=5`;
+        const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
+        const data = await res.json();
+        if (data && data.length > 0) {
+          foundPlaces = data;
+          break;
+        }
+      } catch (err) {
+        console.warn("Search attempt failed:", err);
+      }
+    }
 
-  currentSelectedColor = getNextUniqueColor();
-  currentSelectedIcon = detectAutoIcon(name);
+    // ব্যাকআপ Photon সার্চ (যদি নির্দিষ্ট অফিস না পাওয়া যায়)
+    if (foundPlaces.length === 0) {
+      try {
+        const res = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=22.5726&lon=88.3639&limit=5`);
+        const pData = await res.json();
+        if (pData && pData.features && pData.features.length > 0) {
+          renderPhotonList(pData.features);
+          return;
+        }
+      } catch (e) {}
+    }
 
-  renderTempMarkerWithPopup(lat, lng, name, details, currentSelectedColor, currentSelectedIcon);
-}
+    if (foundPlaces.length > 0) {
+      renderIndiaGovList(foundPlaces);
+    } else {
+      suggestionsBox.style.display = 'none';
+    }
+  }, 250);
+});
 
-function renderTempMarkerWithPopup(lat, lng, name, details, selectedColor, selectedIcon) {
-  if (tempSearchMarker) map.removeLayer(tempSearchMarker);
+function renderIndiaGovList(places) {
+  suggestionsBox.innerHTML = '';
 
-  const tempIcon = L.divIcon({
-    className: 'custom-pin-head-only',
-    html: `
-      <div class="custom-pin-head" style="background-color: ${selectedColor};">
-        <i class="${selectedIcon}"></i>
+  places.forEach((item) => {
+    const name = item.name || item.display_name.split(',')[0];
+    const details = item.display_name.split(',').slice(1, 4).join(',').trim();
+    const lat = parseFloat(item.lat);
+    const lng = parseFloat(item.lon);
+
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <i class="${detectAutoIcon(name)}"></i>
+      <div class="suggestion-text">
+        <span class="suggestion-title">${name}</span>
+        <span class="suggestion-sub">${details}</span>
       </div>
-    `,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14]
+    `;
+
+    li.onclick = () => selectLocation(lat, lng, name, details);
+    suggestionsBox.appendChild(li);
   });
 
-  tempSearchMarker = L.marker([lat, lng], { icon: tempIcon }).addTo(map);
-  const safeDetails = encodeURIComponent(details || '');
-
-  const popupSwatchesHtml = PRESET_12_COLORS.map(c => `
-    <span class="popup-swatch ${c.toLowerCase() === selectedColor.toLowerCase() ? 'active' : ''}" 
-          style="background-color: ${c};" 
-          title="${c}"
-          onclick="changePopupSettings('${safeDetails}', ${lat}, ${lng}, '${c}', '${selectedIcon}')"></span>
-  `).join('');
-
-  const popupIconsHtml = AVAILABLE_ICONS.map(item => `
-    <span class="icon-btn-choice ${item.icon === selectedIcon ? 'active' : ''}" 
-          title="${item.label}"
-          onclick="changePopupSettings('${safeDetails}', ${lat}, ${lng}, '${selectedColor}', '${item.icon}')">
-      <i class="${item.icon}"></i>
-    </span>
-  `).join('');
-
-  let actionButtons = '';
-  if (!originPoint) {
-    actionButtons = `
-      <div class="popup-actions">
-        <button class="btn-add-to-map" onclick="confirmAddFromPopup(${lat}, ${lng}, 'hub', '${selectedColor}', '${selectedIcon}')">
-          <i class="fa-solid fa-star"></i> Set as Fixed Hub
-        </button>
-      </div>
-    `;
-  } else {
-    actionButtons = `
-      <div class="popup-color-bar">
-        <span class="popup-color-label">Icon Category:</span>
-        <div class="icon-picker-grid">
-          ${popupIconsHtml}
-        </div>
-        <span class="popup-color-label" style="margin-top:6px;">Choose Color (12):</span>
-        <div class="popup-swatches">
-          ${popupSwatchesHtml}
-        </div>
-      </div>
-      <div class="popup-actions">
-        <button class="btn-add-to-map" style="background-color:${selectedColor};" onclick="confirmAddFromPopup(${lat}, ${lng}, 'dest', '${selectedColor}', '${selectedIcon}')">
-          <i class="fa-solid fa-plus"></i> Add to map
-        </button>
-        <button class="btn-add-to-map btn-set-hub" onclick="confirmAddFromPopup(${lat}, ${lng}, 'hub', '${selectedColor}', '${selectedIcon}')" title="Set as starting point">
-          <i class="fa-solid fa-star"></i> Set as Hub
-        </button>
-      </div>
-    `;
-  }
-
-  const popupContent = `
-    <div class="gmap-popup">
-      <input type="text" id="popupLocNameInput" class="popup-name-input" value="${name}" placeholder="Type location name..." />
-      <p>${details || 'Selected location'}</p>
-      <small>${lat.toFixed(4)}, ${lng.toFixed(4)}</small>
-      ${actionButtons}
-    </div>
-  `;
-
-  tempSearchMarker.bindPopup(popupContent, { offset: [0, -10] }).openPopup();
+  suggestionsBox.style.display = 'block';
 }
 
+function renderPhotonList(places) {
+  suggestionsBox.innerHTML = '';
+  places.forEach((item) => {
+    const props = item.properties;
+    const name = props.name || props.street || 'Selected Location';
+    const details = [props.district, props.city, props.state].filter(Boolean).join(', ');
+    const [lng, lat] = item.geometry.coordinates;
+
+    const li = document.createElement('li');
+    li.innerHTML = `
+      <i class="${detectAutoIcon(name)}"></i>
+      <div class="suggestion-text">
+        <span class="suggestion-title">${name}</span>
+        <span class="suggestion-sub">${details}</span>
+      </div>
+    `;
+    li.onclick = () => selectLocation(lat, lng, name, details);
+    suggestionsBox.appendChild(li);
+  });
+  suggestionsBox.style.display = 'block';
+}
 // ==========================================
 // 8. PANEL & SIDEBAR RESIZERS
 // ==========================================
