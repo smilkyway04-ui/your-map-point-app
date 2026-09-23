@@ -1,23 +1,25 @@
 // আপনার Cloudflare Worker লিঙ্ক
 const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
 
+console.log("==> FINAL VERSION 101 LOADED <==");
+
 let map = null;
 let currentMarker = null;
 let debounceTimer = null;
 
-// ১. Mappls ম্যাপ শুরু করা (সঠিক নিয়ম: [Latitude, Longitude])
+// ১. Mappls ম্যাপ শুরু করা
 window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // বজবজের সঠিক স্থানাঙ্ক [lat, lng]
+    center: [22.4827, 88.1815], // বজবজ
     zoom: 12
   });
 
   setupMapplsSearch();
 };
 
-// ২. সার্চ এবং ক্লিকে সঠিক জায়গায় মার্কার বসানো
+// ২. সার্চ ও স্বয়ংক্রিয় মার্কার লজিক
 function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -58,10 +60,9 @@ function setupMapplsSearch() {
               let lng = parseFloat(item.longitude || item.entryLongitude);
               const eloc = item.eLoc || item.eloc;
 
-              // ক্লাউডফ্লেয়ার থেকে স্থানাঙ্ক সংগ্রহ
+              // ক্লাউডফ্লেয়ার থেকে স্থানাঙ্ক নেওয়া
               if ((isNaN(lat) || isNaN(lng) || !lat) && eloc) {
                 try {
-                  console.log("eLoc এর স্থানাঙ্ক আনা হচ্ছে:", eloc);
                   const elocRes = await fetch(`${PROXY_URL}?eloc=${encodeURIComponent(eloc)}`);
                   const elocData = await elocRes.json();
                   if (elocData && elocData.latitude && elocData.longitude) {
@@ -73,33 +74,28 @@ function setupMapplsSearch() {
                 }
               }
 
-              console.log("মার্কারের সঠিক স্থানাঙ্ক:", lat, lng);
+              console.log("পিন বসানো হচ্ছে:", lat, lng);
 
-              // স্থানাঙ্ক পাওয়া গেলে ম্যাপ সেন্টার করা ও মার্কার বসানো
+              // স্থানাঙ্ক পাওয়া গেলে মার্কার তৈরি ও ক্যামেরা মুভ
               if (!isNaN(lat) && !isNaN(lng)) {
                 // পুরনো মার্কার সরানো
                 if (currentMarker) {
                   try {
-                    if (typeof currentMarker.remove === 'function') {
-                      currentMarker.remove();
-                    } else if (window.mappls && mappls.remove) {
-                      mappls.remove({ map: map, layer: currentMarker });
-                    }
+                    if (typeof currentMarker.remove === 'function') currentMarker.remove();
+                    else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
                   } catch (e) {}
                   currentMarker = null;
                 }
 
-                // ম্যাপকে সঠিক জায়গায় নিয়ে যাওয়া [lat, lng]
-                map.setCenter([lat, lng]);
-                map.setZoom(16);
-
-                // নতুন মার্কার তৈরি
+                // fitbounds: true দিলে Mappls নিজে থেকে ম্যাপ সেন্টার ও জুম করে নেয়
                 currentMarker = new mappls.Marker({
                   map: map,
-                  position: { lat: lat, lng: lng }
+                  position: { lat: lat, lng: lng },
+                  fitbounds: true,
+                  fitboundOptions: { maxZoom: 16 }
                 });
               } else {
-                console.error("Coordinates could not be found for:", placeName);
+                alert("এই লোকেশনের স্থানাঙ্ক পাওয়া যায়নি!");
               }
             };
 
