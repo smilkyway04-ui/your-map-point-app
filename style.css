@@ -13,7 +13,7 @@ html, body {
   overflow: hidden;
 }
 
-/* পুরো স্ক্রিন জুড়ে ম্যাপ */
+/* পুরো স্ক্রিন জুড়ে Mappls ম্যাপ */
 #map {
   width: 100%;
   height: 100%;
@@ -23,39 +23,79 @@ html, body {
   z-index: 1;
 }
 
-/* ম্যাপের ওপর ভাসমান আধুনিক সার্চবার */
+/* ওপরের ভাসমান সার্চ বার */
 .search-box-wrapper {
   position: absolute;
   top: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 9999;
+  z-index: 99999;
   width: 90%;
-  max-width: 500px;
+  max-width: 480px;
 }
 
 .search-box-wrapper input {
   width: 100%;
-  padding: 14px 20px;
+  padding: 14px 18px;
   font-size: 15px;
   color: #0f172a;
   background: #ffffff;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: 8px;
   outline: none;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  transition: all 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transition: border-color 0.2s;
 }
 
 .search-box-wrapper input:focus {
   border-color: #2563eb;
-  box-shadow: 0 8px 30px rgba(37, 99, 235, 0.25);
 }
 
-/* Mappls-এর সার্চ ড্রপডাউন উপরে রাখার জন্য */
-.as-container, .suggest-list {
-  z-index: 10000 !important;
-  font-family: inherit !important;
-  border-radius: 8px !important;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2) !important;
+/* ড্রপডাউন সাজেশন বক্স */
+.suggest-box {
+  position: absolute;
+  top: 56px;
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  list-style: none;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  max-height: 280px;
+  overflow-y: auto;
+  z-index: 100000;
+  padding: 0;
+  margin: 0;
+  display: none;
+  border: 1px solid #e2e8f0;
+}
+
+.suggest-box li {
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+  color: #1e293b;
+  text-align: left;
+}
+
+.suggest-box li:last-child {
+  border-bottom: none;
+}
+
+.suggest-box li:hover {
+  background: #f8fafc;
+}
+
+.suggest-box li strong {
+  color: #0f172a;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.suggest-box li small {
+  color: #64748b;
+  font-size: 12px;
+  display: block;
+  line-height: 1.3;
 }
