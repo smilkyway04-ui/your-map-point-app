@@ -5,19 +5,19 @@ let map = null;
 let currentMarker = null;
 let debounceTimer = null;
 
-// ১. Mappls ম্যাপ শুরু করা
+// ১. Mappls ম্যাপ শুরু করা (সঠিক অর্ডারে বজবজ)
 window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // বজবজ
+    center: [88.1815, 22.4827], // [Longitude, Latitude]
     zoom: 12
   });
 
   setupMapplsSearch();
 };
 
-// ২. সার্চ ও ক্লিকে মার্কার বসানো
+// ২. সার্চ ও সঠিক স্থানে মার্কার বসানো
 function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -49,7 +49,7 @@ function setupMapplsSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // রেজাল্টে ক্লিকে সরাসরি স্থানাঙ্ক ব্যবহার
+            // ফলাফলে ক্লিকে বজবজ কলেজে যাওয়ার লজিক
             li.onclick = async () => {
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
@@ -68,12 +68,13 @@ function setupMapplsSearch() {
                     lng = parseFloat(elocData.longitude);
                   }
                 } catch (err) {
-                  console.error("Worker coordinate fetch error:", err);
+                  console.error("Worker fetch error:", err);
                 }
               }
 
-              // ম্যাপ নির্দিষ্ট পয়েন্টে নিয়ে যাওয়া ও মার্কার ড্রপ
+              // সঠিক স্থানাঙ্ক পেয়ে গেলে ম্যাপ সেন্টারিং ও মার্কার তৈরি
               if (!isNaN(lat) && !isNaN(lng)) {
+                // পুরনো মার্কার সরানো
                 if (currentMarker) {
                   try {
                     if (typeof currentMarker.remove === 'function') currentMarker.remove();
@@ -82,9 +83,19 @@ function setupMapplsSearch() {
                   currentMarker = null;
                 }
 
-                map.setCenter([lat, lng]);
-                map.setZoom(16);
+                // ভেক্টর ম্যাপের জন্য সঠিক অর্ডার: [lng, lat]
+                if (map.flyTo) {
+                  map.flyTo({
+                    center: [lng, lat],
+                    zoom: 16,
+                    essential: true
+                  });
+                } else if (map.setCenter) {
+                  map.setCenter([lng, lat]);
+                  map.setZoom(16);
+                }
 
+                // মার্কার বসানোর জন্য { lat, lng }
                 currentMarker = new mappls.Marker({
                   map: map,
                   position: { lat: lat, lng: lng }
