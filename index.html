@@ -6,17 +6,18 @@
   <title>Mappls Map & Search</title>
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Mappls আসল Map SDK (যেটি দিয়ে প্রথমে ম্যাপ এসেছিল) -->
-  <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk.js"></script>
+  <!-- Mappls আসল ভেক্টর SDK (অফিশিয়াল কলব্যাক সহ) -->
+  <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk?layer=vector&v=3.0&callback=initMap" defer></script>
+  <script src="app.js" defer></script>
 </head>
 <body>
 
-  <!-- ভাসমান সার্চ বার -->
+  <!-- ওপরের ভাসমান সার্চ বার -->
   <div class="search-box-wrapper">
     <input 
       type="text" 
       id="searchInput" 
-      placeholder="সার্চ করুন (যেমন: Budge Budge 2)..." 
+      placeholder="সার্চ করুন (যেমন: Budge Budge)..." 
       autocomplete="off" 
     />
     <ul id="suggestBox" class="suggest-box"></ul>
@@ -25,6 +26,5 @@
   <!-- ম্যাপ কন্টেইনার -->
   <div id="map"></div>
 
-  <script src="app.js"></script>
 </body>
 </html>
