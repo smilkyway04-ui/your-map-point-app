@@ -2,13 +2,17 @@ let map = null;
 let currentMarker = null;
 let debounceTimer = null;
 
-// ১. Mappls ম্যাপ শুরু করা
-function initMap() {
+// ১. Mappls অফিশিয়াল কলব্যাক ফাংশন (SDK লোড হলেই এটি নিজে থেকে চলবে)
+window.initMap = function () {
+  console.log("Mappls SDK loaded, creating map...");
+
   map = new mappls.Map('map', {
     center: [22.4827, 88.1815], // বজবজ এলাকা
     zoom: 12
   });
-}
+
+  setupSearch();
+};
 
 // ২. সরাসরি সার্চ ইঞ্জিন (কোনো টোকেন ঝামেলা ছাড়া)
 function setupSearch() {
@@ -34,9 +38,17 @@ function setupSearch() {
           q = q.replace(/\b2\b/g, 'II');
         }
 
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' West Bengal')}&format=json&countrycodes=in&limit=5`;
-        const res = await fetch(url);
-        const data = await res.json();
+        // দক্ষিণ ২৪ পরগণা ও পশ্চিমবঙ্গ লোকেশন সার্চ
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' South 24 Parganas')}&format=json&countrycodes=in&limit=5`;
+        let res = await fetch(url);
+        let data = await res.json();
+
+        // রেজাল্ট না পেলে পুরো পশ্চিমবঙ্গ দিয়ে দ্বিতীয় চেষ্টা
+        if (!data || data.length === 0) {
+          const fallbackUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' West Bengal')}&format=json&countrycodes=in&limit=5`;
+          res = await fetch(fallbackUrl);
+          data = await res.json();
+        }
 
         if (data && data.length > 0) {
           suggestBox.innerHTML = '';
@@ -54,18 +66,18 @@ function setupSearch() {
               searchInput.value = name;
               suggestBox.style.display = 'none';
 
-              // ম্যাপ ওই জায়গায় সরানো
+              // ম্যাপকে নির্দিষ্ট জায়গায় নিয়ে যাওয়া
               if (map) {
                 map.setCenter([lat, lng]);
                 map.setZoom(15);
 
-                // আগের পিন থাকলে সরানো
+                // আগের মার্কার থাকলে সরানো
                 if (currentMarker) {
                   if (typeof currentMarker.remove === 'function') currentMarker.remove();
                   else if (mappls.remove) mappls.remove({ map: map, layer: currentMarker });
                 }
 
-                // নতুন পিন বসানো
+                // নতুন মার্কার বসানো
                 currentMarker = new mappls.Marker({
                   map: map,
                   position: { lat: lat, lng: lng }
@@ -86,16 +98,10 @@ function setupSearch() {
     }, 250);
   });
 
-  // সার্চের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করা
+  // সার্চ বক্সের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করা
   document.addEventListener('click', (e) => {
     if (!searchInput.parentElement.contains(e.target)) {
       suggestBox.style.display = 'none';
     }
   });
 }
-
-// পেজ রেডি হলে ম্যাপ ও সার্চ উভয়ই রান করবে
-window.onload = () => {
-  initMap();
-  setupSearch();
-};
