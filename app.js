@@ -1,5 +1,7 @@
-// আপনার Cloudflare Worker URL এখানে দিন
-const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
+// আপনার Cloudflare Worker লিঙ্কটি এখানে রাখুন
+const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/"; // আপনার সঠিক সাবডোমেন দিন
+
+console.log("==> নতুন APP.JS সফলভাবে চালু হয়েছে (VERSION 99) <==");
 
 let map = null;
 let currentMarker = null;
@@ -14,11 +16,11 @@ window.initMap = function () {
     zoom: 12
   });
 
-  setupMapplsOfficialSearch();
+  setupMapplsSearch();
 };
 
-// ২. সার্চ ও ক্লিকে মার্কার বসানোর লজিক
-function setupMapplsOfficialSearch() {
+// ২. Mappls অফিশিয়াল সার্চ এবং মার্কার লজিক
+function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
 
@@ -49,67 +51,62 @@ function setupMapplsOfficialSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // ফলাফলে ক্লিক ইভেন্ট
+            // ফলাফলে ক্লিক করলে এক্স্যাক্ট লোকেশনে যাওয়ার নিরাপদ কোড
             li.onclick = async () => {
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
 
-              let lat = parseFloat(item.latitude || item.entryLatitude);
-              let lng = parseFloat(item.longitude || item.entryLongitude);
-              const eloc = item.eLoc || item.eloc;
+              console.log("ক্লিক করা হয়েছে:", placeName);
 
-              // পদ্ধতি ১: Worker দিয়ে Mappls eLoc থেকে স্থানাঙ্ক সংগ্রহ
-              if ((isNaN(lat) || isNaN(lng) || lat === 0) && eloc) {
+              // পুরনো মার্কার সরানো
+              if (currentMarker) {
                 try {
-                  console.log("Fetching exact Lat/Lng for eLoc:", eloc);
-                  const elocRes = await fetch(`${PROXY_URL}?eloc=${encodeURIComponent(eloc)}`);
-                  const elocData = await elocRes.json();
-                  lat = parseFloat(elocData.latitude || elocData.lat);
-                  lng = parseFloat(elocData.longitude || elocData.lng);
-                } catch (e) {
-                  console.warn("eLoc fetch warning:", e);
-                }
+                  if (typeof currentMarker.remove === 'function') currentMarker.remove();
+                  else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
+                } catch (e) {}
+                currentMarker = null;
               }
 
-              // পদ্ধতি ২: যদি eLoc থেকে কোনো কারণে স্থানাঙ্ক না আসে, তবে ঠিকানা দিয়ে তাৎক্ষণিক ব্যাকআপ সংগ্রহ
+              let lat = parseFloat(item.latitude || item.entryLatitude);
+              let lng = parseFloat(item.longitude || item.entryLongitude);
+
+              // Mappls সরাসরি Lat/Lng না পাঠালে জায়গার নাম দিয়ে তাৎক্ষণিক স্থানাঙ্ক সংগ্রহ
               if (isNaN(lat) || isNaN(lng) || lat === 0) {
+                console.log("Mappls স্থানাঙ্ক দেয়নি, সঠিক Lat/Lng বের করা হচ্ছে...");
                 try {
-                  const cleanQuery = `${placeName}, ${placeAddress}`.replace(/,/g, ' ');
-                  const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanQuery)}&format=json&limit=1`);
-                  const geoData = await geoRes.json();
+                  // নাম ও ঠিকানা দিয়ে জিওকোডিং
+                  const searchQuery = `${placeName} ${placeAddress}`.replace(/,/g, ' ');
+                  let geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(searchQuery)}&format=json&limit=1`);
+                  let geoData = await geoRes.json();
+
+                  // ঠিকানা না পেলে শুধু নাম দিয়ে চেষ্টা
+                  if (!geoData || geoData.length === 0) {
+                    geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(placeName + ' South 24 Parganas')}&format=json&limit=1`);
+                    geoData = await geoRes.json();
+                  }
+
                   if (geoData && geoData.length > 0) {
                     lat = parseFloat(geoData[0].lat);
                     lng = parseFloat(geoData[0].lon);
                   }
-                } catch (e) {
-                  console.warn("Fallback geocoding warning:", e);
+                } catch (err) {
+                  console.error("Geocoding error:", err);
                 }
               }
 
-              // স্থানাঙ্ক পাওয়া গেলে ম্যাপ সরানো ও মার্কার বসানো
+              // সঠিক সংখ্যা পেয়ে গেলে ম্যাপ সেন্টারিং ও মার্কার তৈরি
               if (!isNaN(lat) && !isNaN(lng)) {
-                console.log("Moving map to Coordinates:", lat, lng);
+                console.log("মার্কার বসানো হচ্ছে:", lat, lng);
 
-                // পুরনো মার্কার সরানো
-                if (currentMarker) {
-                  try {
-                    if (typeof currentMarker.remove === 'function') currentMarker.remove();
-                    else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
-                  } catch (err) {}
-                  currentMarker = null;
-                }
-
-                // ম্যাপ নির্দিষ্ট পয়েন্টে নিয়ে যাওয়া
                 map.setCenter([lat, lng]);
                 map.setZoom(16);
 
-                // মার্কার বসানো
                 currentMarker = new mappls.Marker({
                   map: map,
                   position: { lat: lat, lng: lng }
                 });
               } else {
-                console.error("Coordinates could not be found for:", placeName);
+                console.error("এই জায়গার স্থানাঙ্ক উদ্ধার করা যায়নি।");
               }
             };
 
@@ -120,7 +117,7 @@ function setupMapplsOfficialSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Search fetch error:", err);
+        console.error("Worker fetch error:", err);
         suggestBox.style.display = 'none';
       }
     }, 300);
