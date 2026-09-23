@@ -1,3 +1,6 @@
+// Cloudflare Worker থেকে পাওয়া URL এখানে পেস্ট করুন
+const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
+
 let map = null;
 let currentMarker = null;
 let debounceTimer = null;
@@ -7,25 +10,25 @@ window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // Budge Budge
+    center: [22.4827, 88.1815], // বজবজ এলাকা
     zoom: 12
   });
 
-  setupSmartSearch();
+  setupMapplsOfficialSearch();
 };
 
-// ২. নির্ভরযোগ্য স্মার্ট সার্চ ইঞ্জিন (CORS বা টোকেন ছাড়া)
-function setupSmartSearch() {
+// ২. ক্লাউডফ্লেয়ার প্রক্সির মাধ্যমে অফিশিয়াল Mappls সার্চ চালানো
+function setupMapplsOfficialSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
 
   if (!searchInput || !suggestBox) return;
 
   searchInput.addEventListener('input', (e) => {
-    const rawQuery = e.target.value.trim();
+    const query = e.target.value.trim();
     clearTimeout(debounceTimer);
 
-    if (rawQuery.length < 2) {
+    if (query.length < 2) {
       suggestBox.style.display = 'none';
       suggestBox.innerHTML = '';
       return;
@@ -33,48 +36,38 @@ function setupSmartSearch() {
 
     debounceTimer = setTimeout(async () => {
       try {
-        // "Budge Budge 2 BDO" লিখলে সঠিক কি-ওয়ার্ড ফিল্টার
-        let q = rawQuery.replace(/\bbdo\b/gi, '').trim();
-        if (/\b2\b/.test(q)) {
-          q = q.replace(/\b2\b/g, 'II');
-        }
-
-        // Photon/OSM High-Speed Search (CORS ফ্রি)
-        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&lat=22.4827&lon=88.1815&limit=6`;
-        const res = await fetch(url);
+        // ক্লাউডফ্লেয়ার ওয়ার্কার কল
+        const res = await fetch(`${PROXY_URL}?q=${encodeURIComponent(query)}`);
         const data = await res.json();
 
-        if (data && data.features && data.features.length > 0) {
+        // Mappls এর আসল রেসপন্স থেকে সাজেশনের তালিকা নেওয়া
+        const results = data.suggestedLocations || [];
+
+        if (results.length > 0) {
           suggestBox.innerHTML = '';
-          data.features.forEach(feature => {
-            const props = feature.properties;
-            const coords = feature.geometry.coordinates; // [lng, lat]
-
-            const name = props.name || props.street || q;
-            const details = [props.district, props.city, props.state].filter(Boolean).join(', ');
-
+          results.forEach(item => {
             const li = document.createElement('li');
-            li.innerHTML = `<strong>${name}</strong><small>${details}</small>`;
+            const placeName = item.placeName || item.poi || "Unnamed Place";
+            const placeAddress = item.placeAddress || "";
+
+            li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
             li.onclick = () => {
-              const lng = coords[0];
-              const lat = coords[1];
+              const lat = parseFloat(item.latitude || item.entryLatitude);
+              const lng = parseFloat(item.longitude || item.entryLongitude);
 
-              searchInput.value = name;
+              searchInput.value = placeName;
               suggestBox.style.display = 'none';
 
-              // Mappls ম্যাপ নির্দিষ্ট স্থানে নিয়ে যাওয়া
-              if (map) {
+              if (!isNaN(lat) && !isNaN(lng)) {
                 map.setCenter([lat, lng]);
-                map.setZoom(15);
+                map.setZoom(16);
 
-                // আগের মার্কার সরানো
                 if (currentMarker) {
                   if (typeof currentMarker.remove === 'function') currentMarker.remove();
                   else if (mappls.remove) mappls.remove({ map: map, layer: currentMarker });
                 }
 
-                // নতুন মার্কার বসানো
                 currentMarker = new mappls.Marker({
                   map: map,
                   position: { lat: lat, lng: lng }
@@ -89,13 +82,12 @@ function setupSmartSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Search fetch error:", err);
+        console.error("Worker fetch error:", err);
         suggestBox.style.display = 'none';
       }
-    }, 250);
+    }, 300);
   });
 
-  // বাইরে ক্লিক করলে তালিকা বন্ধ হওয়া
   document.addEventListener('click', (e) => {
     if (!searchInput.parentElement.contains(e.target)) {
       suggestBox.style.display = 'none';
