@@ -4,30 +4,26 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mappls Map & Search</title>
-
-  <!-- সিএসএস ফাইল লিঙ্ক -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Mappls অফিশিয়াল Web SDK এবং সার্চ প্লাগইন -->
+  <!-- Mappls Vector Map SDK (প্লাগইন ছাড়া, যাতে টোকেন এরর না আসে) -->
   <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk?layer=vector&v=3.0&callback=initMap" defer></script>
-  <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk_plugins?v=3.0" defer></script>
-
-  <!-- জাভাস্ক্রিপ্ট ফাইল লিঙ্ক -->
   <script src="app.js" defer></script>
 </head>
 <body>
 
-  <!-- স্ক্রিনের ওপর ভাসমান সার্চ বার -->
+  <!-- ম্যাপের ওপর ভাসমান সার্চ বক্স -->
   <div class="search-box-wrapper">
     <input 
       type="text" 
       id="searchInput" 
-      placeholder="লোকেশন খুঁজুন (যেমন: Budge Budge 2 BDO)..." 
+      placeholder="সার্চ করুন (যেমন: Budge Budge 2 BDO)..." 
       autocomplete="off" 
     />
+    <ul id="suggestBox" class="suggest-box"></ul>
   </div>
 
-  <!-- ম্যাপ দেখানোর প্রধান কন্টেইনার -->
+  <!-- Mappls মানচিত্র -->
   <div id="map"></div>
 
 </body>
