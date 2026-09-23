@@ -1,25 +1,47 @@
+// কনসোলের Credentials ট্যাব থেকে পাওয়া Key Pair বসান
+const CLIENT_ID = "96dHZVzsAutmNa1VQslCwT2nCpjRwVk7tHHpITJupj4bNvumXIlkl7qFmFmimS0w9TB9Au8mHXUAj680O4eYYD11x-zAIvuM";
+const CLIENT_SECRET = "lrFxI-iSEg98O3UXe86ZUUB6jdVx9O8jNtG_5M7wvsXFgwAIWLVxceijzud5qBGO5LSdseZgEKe_mbba-lh-pYxLCPSK5yK25UvCGKwaGO0=";
+
 let map = null;
 let currentMarker = null;
+let accessToken = null;
 let debounceTimer = null;
 
-// ১. Mappls অফিশিয়াল কলব্যাক ফাংশন (SDK লোড হলেই এটি নিজে থেকে চলবে)
-window.initMap = function () {
-  console.log("Mappls SDK loaded, creating map...");
+// ১. Mappls থেকে সিকিউরিটি টোকেন সংগ্রহ করা
+async function getMapplsToken() {
+  try {
+    const res = await fetch("https://outpost.mappls.com/api/security/oauth/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: `grant_type=client_credentials&client_id=${encodeURIComponent(CLIENT_ID)}&client_secret=${encodeURIComponent(CLIENT_SECRET)}`
+    });
+    const data = await res.json();
+    if (data.access_token) {
+      accessToken = data.access_token;
+      console.log("Mappls Token Generated Successfully!");
+    }
+  } catch (err) {
+    console.error("Token error:", err);
+  }
+}
 
+// ২. Mappls ম্যাপ শুরু করা
+window.initMap = async function () {
   map = new mappls.Map('map', {
     center: [22.4827, 88.1815], // বজবজ এলাকা
     zoom: 12
   });
 
-  setupSearch();
+  await getMapplsToken();
+  setupMapplsSearch();
 };
 
-// ২. সরাসরি সার্চ ইঞ্জিন (কোনো টোকেন ঝামেলা ছাড়া)
-function setupSearch() {
+// ৩. Mappls অফিশিয়াল Atlas Search ইঞ্জিন
+function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
-
-  if (!searchInput || !suggestBox) return;
 
   searchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim();
@@ -32,52 +54,44 @@ function setupSearch() {
     }
 
     debounceTimer = setTimeout(async () => {
+      if (!accessToken) {
+        await getMapplsToken();
+      }
+
       try {
-        let q = query;
-        if (/\b2\b/.test(q)) {
-          q = q.replace(/\b2\b/g, 'II');
-        }
+        // Mappls-এর অফিশিয়াল Atlas AutoSuggest API
+        const url = `https://atlas.mappls.com/api/places/search/json?query=${encodeURIComponent(query)}&location=22.4827,88.1815`;
+        const res = await fetch(url, {
+          headers: {
+            "Authorization": `Bearer ${accessToken}`
+          }
+        });
+        const data = await res.json();
 
-        // দক্ষিণ ২৪ পরগণা ও পশ্চিমবঙ্গ লোকেশন সার্চ
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' South 24 Parganas')}&format=json&countrycodes=in&limit=5`;
-        let res = await fetch(url);
-        let data = await res.json();
+        const results = data.suggestedLocations || [];
 
-        // রেজাল্ট না পেলে পুরো পশ্চিমবঙ্গ দিয়ে দ্বিতীয় চেষ্টা
-        if (!data || data.length === 0) {
-          const fallbackUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' West Bengal')}&format=json&countrycodes=in&limit=5`;
-          res = await fetch(fallbackUrl);
-          data = await res.json();
-        }
-
-        if (data && data.length > 0) {
+        if (results.length > 0) {
           suggestBox.innerHTML = '';
-          data.forEach(item => {
+          results.forEach(item => {
             const li = document.createElement('li');
-            const name = item.display_name.split(',')[0];
-            const sub = item.display_name.split(',').slice(1, 4).join(', ');
-
-            li.innerHTML = `<strong>${name}</strong><small>${sub}</small>`;
+            li.innerHTML = `<strong>${item.placeName || item.poi}</strong><small>${item.placeAddress || ''}</small>`;
 
             li.onclick = () => {
-              const lat = parseFloat(item.lat);
-              const lng = parseFloat(item.lon);
+              const lat = parseFloat(item.latitude || item.entryLatitude);
+              const lng = parseFloat(item.longitude || item.entryLongitude);
 
-              searchInput.value = name;
+              searchInput.value = item.placeName;
               suggestBox.style.display = 'none';
 
-              // ম্যাপকে নির্দিষ্ট জায়গায় নিয়ে যাওয়া
-              if (map) {
+              if (!isNaN(lat) && !isNaN(lng)) {
                 map.setCenter([lat, lng]);
-                map.setZoom(15);
+                map.setZoom(16);
 
-                // আগের মার্কার থাকলে সরানো
                 if (currentMarker) {
                   if (typeof currentMarker.remove === 'function') currentMarker.remove();
                   else if (mappls.remove) mappls.remove({ map: map, layer: currentMarker });
                 }
 
-                // নতুন মার্কার বসানো
                 currentMarker = new mappls.Marker({
                   map: map,
                   position: { lat: lat, lng: lng }
@@ -92,13 +106,11 @@ function setupSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Search error:", err);
-        suggestBox.style.display = 'none';
+        console.error("Mappls Search Error:", err);
       }
     }, 250);
   });
 
-  // সার্চ বক্সের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করা
   document.addEventListener('click', (e) => {
     if (!searchInput.parentElement.contains(e.target)) {
       suggestBox.style.display = 'none';
