@@ -17,7 +17,7 @@ window.initMap = function () {
   setupMapplsSearch();
 };
 
-// ২. সার্চ ও স্বয়ংক্রিয় মার্কার বসানো
+// ২. সার্চ ও ক্লিকে মার্কার বসানো
 function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -49,7 +49,7 @@ function setupMapplsSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // ফলাফলে ক্লিক হ্যান্ডলার
+            // রেজাল্টে ক্লিকে সরাসরি স্থানাঙ্ক ব্যবহার
             li.onclick = async () => {
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
@@ -58,7 +58,7 @@ function setupMapplsSearch() {
               let lng = parseFloat(item.longitude || item.entryLongitude);
               const eloc = item.eLoc || item.eloc;
 
-              // ১. ক্লাউডফ্লেয়ার দিয়ে Mappls Geocode API থেকে স্থানাঙ্ক সংগ্রহ
+              // ক্লাউডফ্লেয়ার থেকে স্থানাঙ্ক সংগ্রহ
               if ((isNaN(lat) || isNaN(lng) || !lat) && eloc) {
                 try {
                   const elocRes = await fetch(`${PROXY_URL}?eloc=${encodeURIComponent(eloc)}`);
@@ -67,28 +67,12 @@ function setupMapplsSearch() {
                     lat = parseFloat(elocData.latitude);
                     lng = parseFloat(elocData.longitude);
                   }
-                } catch (e) {
-                  console.warn("eLoc fetch warning:", e);
+                } catch (err) {
+                  console.error("Worker coordinate fetch error:", err);
                 }
               }
 
-              // ২. ব্যাকআপ জিওকোডার (যদি কোনো কারণে Mappls ডেটা মিস করে)
-              if (isNaN(lat) || isNaN(lng) || !lat) {
-                try {
-                  const cleanName = placeName.replace(/[^a-zA-Z0-9\s]/g, '').trim();
-                  const geoRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(cleanName)}&lat=22.4827&lon=88.1815&limit=1`);
-                  const geoData = await geoRes.json();
-                  if (geoData && geoData.features && geoData.features.length > 0) {
-                    const coords = geoData.features[0].geometry.coordinates;
-                    lng = parseFloat(coords[0]);
-                    lat = parseFloat(coords[1]);
-                  }
-                } catch (e) {
-                  console.warn("Fallback geocoder warning:", e);
-                }
-              }
-
-              // ৩. ম্যাপ নির্দিষ্ট জায়গায় নিয়ে গিয়ে মার্কার বসানো
+              // ম্যাপ নির্দিষ্ট পয়েন্টে নিয়ে যাওয়া ও মার্কার ড্রপ
               if (!isNaN(lat) && !isNaN(lng)) {
                 if (currentMarker) {
                   try {
@@ -115,7 +99,7 @@ function setupMapplsSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Worker fetch error:", err);
+        console.error("Search fetch error:", err);
         suggestBox.style.display = 'none';
       }
     }, 300);
