@@ -6,14 +6,18 @@
   <title>Mappls Map & Search</title>
   <link rel="stylesheet" href="style.css" />
 
-  <!-- Mappls আসল ভেক্টর SDK -->
-  <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk?layer=vector&v=3.0&callback=initMap" defer></script>
-  <!-- v=101 দিয়ে ব্রাউজারের পুরনো ক্যাশ বাইপাস করা হলো -->
-  <script src="app.js?v=102" defer></script>
+  <!-- ১. Mappls আসল ভেক্টর SDK -->
+  <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk?layer=vector&v=3.0&callback=initMap"></script>
+  
+  <!-- ২. Mappls অফিশিয়াল প্লাগইন SDK (eLoc দিয়ে নিখুঁত বিল্ডিং লোকেশনের জন্য বাধ্যতামূলক) -->
+  <script src="https://apis.mappls.com/advancedmaps/api/e4313b0c5f3e824b26f0623f91d4334e/map_sdk_plugins?v=3.0"></script>
+  
+  <!-- ৩. আপনার অ্যাপ কোড (v=105 দিয়ে ক্যাশ বাইপাস) -->
+  <script src="app.js?v=105" defer></script>
 </head>
 <body>
 
-  <!-- সার্চ বার -->
+  <!-- সার্চ বক্স -->
   <div class="search-box-wrapper">
     <input 
       type="text" 
@@ -24,7 +28,7 @@
     <ul id="suggestBox" class="suggest-box"></ul>
   </div>
 
-  <!-- ম্যাপ কন্টেইনার -->
+  <!-- ম্যাপ -->
   <div id="map"></div>
 
 </body>
