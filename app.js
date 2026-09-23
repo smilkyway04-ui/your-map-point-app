@@ -1,25 +1,23 @@
-// Apnar Cloudflare Worker URL
+// আপনার Cloudflare Worker URL
 const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
-
-console.log("==> FINAL PIN-MARKER VERSION 102 LOADED <==");
 
 let map = null;
 let currentMarker = null;
 let debounceTimer = null;
 
-// 1. Mappls map load
+// ১. Mappls ম্যাপ শুরু করা
 window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // Budge Budge
+    center: [22.4827, 88.1815], // বজবজ
     zoom: 13
   });
 
   setupMapplsSearch();
 };
 
-// 2. Search & Exact Pin Drop
+// ২. সার্চ ও নিখুঁত মার্কার বসানো
 function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -51,14 +49,12 @@ function setupMapplsSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // Result-e click event
+            // ফলাফলে ক্লিক হ্যান্ডলার
             li.onclick = async () => {
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
 
-              console.log("Clicked Item:", placeName, item);
-
-              // Purono marker remove
+              // পুরনো মার্কার সরানো
               if (currentMarker) {
                 try {
                   if (typeof currentMarker.remove === 'function') currentMarker.remove();
@@ -69,53 +65,37 @@ function setupMapplsSearch() {
 
               const eloc = item.eLoc || item.eloc;
 
-              // UPAY 1: Mappls Official pinMarker (100% Exact Building Location)
-              if (typeof mappls.pinMarker === 'function' && eloc) {
-                console.log("Using official mappls.pinMarker for eLoc:", eloc);
-                try {
-                  currentMarker = mappls.pinMarker({
-                    map: map,
-                    pin: eloc,
-                    popupHtml: `<strong>${placeName}</strong><br><small>${placeAddress}</small>`
-                  });
-                  return; // Mappls nijei map-ke oi college-e niye giye marker fele debe!
-                } catch (err) {
-                  console.warn("pinMarker error, trying coordinates fallback:", err);
-                }
+              // পদ্ধতি ১: Mappls প্লাগইন দিয়ে সরাসরি eLoc পিন (১০০% নিখুঁত কলেজ পয়েন্ট)
+              if (window.mappls && typeof mappls.pinMarker === 'function' && eloc) {
+                console.log("Mappls প্লাগইন দিয়ে আসল পয়েন্টে মার্কার বসানো হচ্ছে:", eloc);
+                currentMarker = mappls.pinMarker({
+                  map: map,
+                  pin: eloc,
+                  popupHtml: `<strong>${placeName}</strong><br><small>${placeAddress}</small>`,
+                  fitbounds: true,
+                  fitboundOptions: { maxZoom: 17 }
+                });
+                return;
               }
 
-              // UPAY 2: Street-level smart fallback (Gram-er moddhe na fele rasta/college point-e felbe)
+              // পদ্ধতি ২: ব্যাকআপ স্থানাঙ্ক পদ্ধতি
               let lat = parseFloat(item.latitude || item.entryLatitude);
               let lng = parseFloat(item.longitude || item.entryLongitude);
 
               if (isNaN(lat) || isNaN(lng) || !lat) {
                 try {
-                  const streetQuery = `${placeName}, Budge Budge`;
-                  const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(streetQuery)}&format=json&limit=1`);
-                  const geoData = await geoRes.json();
-
-                  if (geoData && geoData.length > 0 && geoData[0].type !== 'administrative') {
-                    lat = parseFloat(geoData[0].lat);
-                    lng = parseFloat(geoData[0].lon);
-                  } else {
-                    // Street fallback: Deshbandhu Chittaranjan Das Road, Budge Budge
-                    const roadRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent('Deshbandhu Chittaranjan Das Road Budge Budge')}&format=json&limit=1`);
-                    const roadData = await roadRes.json();
-                    if (roadData && roadData.length > 0) {
-                      lat = parseFloat(roadData[0].lat);
-                      lng = parseFloat(roadData[0].lon);
-                    }
+                  const elocRes = await fetch(`${PROXY_URL}?eloc=${encodeURIComponent(eloc)}`);
+                  const elocData = await elocRes.json();
+                  if (elocData && elocData.latitude && elocData.longitude) {
+                    lat = parseFloat(elocData.latitude);
+                    lng = parseFloat(elocData.longitude);
                   }
-                } catch (err) {
-                  console.error("Fallback error:", err);
-                }
+                } catch (e) {}
               }
 
-              // Direct Coordinate Marker Drop
               if (!isNaN(lat) && !isNaN(lng)) {
                 map.setCenter([lat, lng]);
                 map.setZoom(16);
-
                 currentMarker = new mappls.Marker({
                   map: map,
                   position: { lat: lat, lng: lng }
@@ -130,7 +110,6 @@ function setupMapplsSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Search fetch error:", err);
         suggestBox.style.display = 'none';
       }
     }, 300);
