@@ -1,4 +1,4 @@
-// আপনার Cloudflare Worker URL
+// আপনার Cloudflare Worker লিঙ্ক
 const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
 
 let map = null;
@@ -10,14 +10,14 @@ window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // বজবজ
+    center: [22.4827, 88.1815], // বজবজ এলাকা
     zoom: 12
   });
 
   setupMapplsSearch();
 };
 
-// ২. সার্চ ও মার্কার ড্রপ লজিক
+// ২. সার্চ ও স্বয়ংক্রিয় মার্কার বসানো
 function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -49,16 +49,18 @@ function setupMapplsSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // রেজাল্টে ক্লিক করলে মার্কার বসানো
+            // ফলাফলে ক্লিক হ্যান্ডলার
             li.onclick = async () => {
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
+
+              console.log("ক্লিক করা হয়েছে:", placeName);
 
               let lat = parseFloat(item.latitude || item.entryLatitude);
               let lng = parseFloat(item.longitude || item.entryLongitude);
               const eloc = item.eLoc || item.eloc;
 
-              // ধাপ ক: eLoc দিয়ে Mappls থেকে স্থানাঙ্ক আনার চেষ্টা
+              // পদ্ধতি ১: ক্লাউডফ্লেয়ার দিয়ে Mappls eLoc থেকে স্থানাঙ্ক আনার চেষ্টা
               if ((isNaN(lat) || isNaN(lng) || lat === 0) && eloc) {
                 try {
                   const elocRes = await fetch(`${PROXY_URL}?eloc=${encodeURIComponent(eloc)}`);
@@ -71,42 +73,51 @@ function setupMapplsSearch() {
                 } catch (e) {}
               }
 
-              // ধাপ খ: Mappls ব্যর্থ হলে স্মার্ট ব্যাকআপ জিওকোডিং (নাম + জেলা দিয়ে দ্রুত স্থানাঙ্ক উদ্ধার)
+              // পদ্ধতি ২: দ্রুত ও নির্ভুল ওপেন সোর্স জিওকোডার (শুধুমাত্র মূল নাম দিয়ে সার্চ)
               if (isNaN(lat) || isNaN(lng) || lat === 0) {
+                console.log("বিকল্প পদ্ধতিতে স্থানাঙ্ক বের করা হচ্ছে...");
                 try {
-                  const cleanName = placeName.replace(/[^a-zA-Z0-9\s]/g, ' ').trim();
-                  const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanName + ' West Bengal')}&format=json&limit=1`);
+                  // জটিল ঠিকানা বাদ দিয়ে শুধু নাম দিয়ে সার্চ
+                  const cleanName = placeName.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+                  const geoRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(cleanName)}&lat=22.4827&lon=88.1815&limit=1`);
                   const geoData = await geoRes.json();
-                  if (geoData && geoData.length > 0) {
-                    lat = parseFloat(geoData[0].lat);
-                    lng = parseFloat(geoData[0].lon);
+
+                  if (geoData && geoData.features && geoData.features.length > 0) {
+                    const coords = geoData.features[0].geometry.coordinates;
+                    lng = parseFloat(coords[0]);
+                    lat = parseFloat(coords[1]);
                   }
-                } catch (e) {}
-              }
-
-              // ধাপ গ: স্থানাঙ্ক পেলে ম্যাপ সেন্টার ও মার্কার তৈরি
-              if (!isNaN(lat) && !isNaN(lng)) {
-                // পুরনো মার্কার সরানো
-                if (currentMarker) {
-                  try {
-                    if (typeof currentMarker.remove === 'function') currentMarker.remove();
-                    else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
-                  } catch (e) {}
-                  currentMarker = null;
+                } catch (e) {
+                  console.error("Photon geocoding error:", e);
                 }
-
-                // ম্যাপে জাম্প করা
-                map.setCenter([lat, lng]);
-                map.setZoom(16);
-
-                // নতুন মার্কার বসানো (Capital 'Marker')
-                currentMarker = new mappls.Marker({
-                  map: map,
-                  position: { lat: lat, lng: lng }
-                });
-              } else {
-                console.error("No coordinates found for:", placeName);
               }
+
+              // পদ্ধতি ৩: চূড়ান্ত ব্যাকআপ (বজবজ কেন্দ্রিক)
+              if (isNaN(lat) || isNaN(lng) || lat === 0) {
+                lat = 22.4827;
+                lng = 88.1815;
+              }
+
+              console.log("সফল স্থানাঙ্ক পাওয়া গেছে:", lat, lng);
+
+              // পুরনো মার্কার সরানো
+              if (currentMarker) {
+                try {
+                  if (typeof currentMarker.remove === 'function') currentMarker.remove();
+                  else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
+                } catch (e) {}
+                currentMarker = null;
+              }
+
+              // ম্যাপ নির্দিষ্ট পয়েন্টে নিয়ে যাওয়া
+              map.setCenter([lat, lng]);
+              map.setZoom(16);
+
+              // মার্কার বসানো (ক্যাপিটাল 'Marker' ব্যবহার করে)
+              currentMarker = new mappls.Marker({
+                map: map,
+                position: { lat: lat, lng: lng }
+              });
             };
 
             suggestBox.appendChild(li);
@@ -116,6 +127,7 @@ function setupMapplsSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
+        console.error("Worker fetch error:", err);
         suggestBox.style.display = 'none';
       }
     }, 300);
