@@ -1,4 +1,4 @@
-// Cloudflare Worker থেকে পাওয়া URL এখানে পেস্ট করুন
+// আপনার Cloudflare Worker URL
 const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
 
 let map = null;
@@ -17,7 +17,7 @@ window.initMap = function () {
   setupMapplsOfficialSearch();
 };
 
-// ২. ক্লাউডফ্লেয়ার প্রক্সির মাধ্যমে অফিশিয়াল Mappls সার্চ চালানো
+// ২. সার্চ ও ক্লিকে ম্যাপে যাওয়া
 function setupMapplsOfficialSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -36,11 +36,8 @@ function setupMapplsOfficialSearch() {
 
     debounceTimer = setTimeout(async () => {
       try {
-        // ক্লাউডফ্লেয়ার ওয়ার্কার কল
         const res = await fetch(`${PROXY_URL}?q=${encodeURIComponent(query)}`);
         const data = await res.json();
-
-        // Mappls এর আসল রেসপন্স থেকে সাজেশনের তালিকা নেওয়া
         const results = data.suggestedLocations || [];
 
         if (results.length > 0) {
@@ -52,26 +49,57 @@ function setupMapplsOfficialSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
+            // ক্লিকে নির্দিষ্ট জায়গায় যাওয়ার নিখুঁত লজিক
             li.onclick = () => {
-              const lat = parseFloat(item.latitude || item.entryLatitude);
-              const lng = parseFloat(item.longitude || item.entryLongitude);
+              console.log("Selected Item:", item);
 
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
 
-              if (!isNaN(lat) && !isNaN(lng)) {
-                map.setCenter([lat, lng]);
-                map.setZoom(16);
+              // অক্ষাংশ ও দ্রাঘিমাংশ সংগ্রহ
+              const lat = parseFloat(item.latitude || item.entryLatitude);
+              const lng = parseFloat(item.longitude || item.entryLongitude);
 
-                if (currentMarker) {
-                  if (typeof currentMarker.remove === 'function') currentMarker.remove();
-                  else if (mappls.remove) mappls.remove({ map: map, layer: currentMarker });
+              console.log("Moving to:", lat, lng);
+
+              if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
+                // ১. সঠিক অর্ডারে ম্যাপকে স্মুথভাবে সেই জায়গায় নিয়ে যাওয়া [lng, lat]
+                if (map.flyTo) {
+                  map.flyTo({
+                    center: [lng, lat],
+                    zoom: 16,
+                    essential: true
+                  });
+                } else if (map.setCenter) {
+                  map.setCenter([lng, lat]);
+                  map.setZoom(16);
                 }
 
-                currentMarker = new mappls.Marker({
-                  map: map,
-                  position: { lat: lat, lng: lng }
-                });
+                // ২. আগের মার্কার থাকলে নিরাপদে সরানো
+                if (currentMarker) {
+                  try {
+                    if (typeof currentMarker.remove === 'function') {
+                      currentMarker.remove();
+                    } else if (window.mappls && mappls.remove) {
+                      mappls.remove({ map: map, layer: currentMarker });
+                    }
+                  } catch (e) {
+                    console.warn("Marker removal warning:", e);
+                  }
+                  currentMarker = null;
+                }
+
+                // ৩. নতুন মার্কার বসানো
+                try {
+                  currentMarker = new mappls.Marker({
+                    map: map,
+                    position: { lat: lat, lng: lng }
+                  });
+                } catch (err) {
+                  console.error("Marker error:", err);
+                }
+              } else {
+                console.error("No valid coordinates found in this item:", item);
               }
             };
 
@@ -82,12 +110,13 @@ function setupMapplsOfficialSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Worker fetch error:", err);
+        console.error("Search error:", err);
         suggestBox.style.display = 'none';
       }
     }, 300);
   });
 
+  // সার্চ বক্সের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করা
   document.addEventListener('click', (e) => {
     if (!searchInput.parentElement.contains(e.target)) {
       suggestBox.style.display = 'none';
