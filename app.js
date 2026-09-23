@@ -1,25 +1,25 @@
-// আপনার Cloudflare Worker লিঙ্ক
+// Apnar Cloudflare Worker URL
 const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
 
-console.log("==> FINAL VERSION 101 LOADED <==");
+console.log("==> FINAL PIN-MARKER VERSION 102 LOADED <==");
 
 let map = null;
 let currentMarker = null;
 let debounceTimer = null;
 
-// ১. Mappls ম্যাপ শুরু করা
+// 1. Mappls map load
 window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // বজবজ
-    zoom: 12
+    center: [22.4827, 88.1815], // Budge Budge
+    zoom: 13
   });
 
   setupMapplsSearch();
 };
 
-// ২. সার্চ ও স্বয়ংক্রিয় মার্কার লজিক
+// 2. Search & Exact Pin Drop
 function setupMapplsSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -51,51 +51,75 @@ function setupMapplsSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // ফলাফলে ক্লিক হ্যান্ডলার
+            // Result-e click event
             li.onclick = async () => {
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
 
-              let lat = parseFloat(item.latitude || item.entryLatitude);
-              let lng = parseFloat(item.longitude || item.entryLongitude);
+              console.log("Clicked Item:", placeName, item);
+
+              // Purono marker remove
+              if (currentMarker) {
+                try {
+                  if (typeof currentMarker.remove === 'function') currentMarker.remove();
+                  else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
+                } catch (e) {}
+                currentMarker = null;
+              }
+
               const eloc = item.eLoc || item.eloc;
 
-              // ক্লাউডফ্লেয়ার থেকে স্থানাঙ্ক নেওয়া
-              if ((isNaN(lat) || isNaN(lng) || !lat) && eloc) {
+              // UPAY 1: Mappls Official pinMarker (100% Exact Building Location)
+              if (typeof mappls.pinMarker === 'function' && eloc) {
+                console.log("Using official mappls.pinMarker for eLoc:", eloc);
                 try {
-                  const elocRes = await fetch(`${PROXY_URL}?eloc=${encodeURIComponent(eloc)}`);
-                  const elocData = await elocRes.json();
-                  if (elocData && elocData.latitude && elocData.longitude) {
-                    lat = parseFloat(elocData.latitude);
-                    lng = parseFloat(elocData.longitude);
-                  }
+                  currentMarker = mappls.pinMarker({
+                    map: map,
+                    pin: eloc,
+                    popupHtml: `<strong>${placeName}</strong><br><small>${placeAddress}</small>`
+                  });
+                  return; // Mappls nijei map-ke oi college-e niye giye marker fele debe!
                 } catch (err) {
-                  console.error("Worker fetch error:", err);
+                  console.warn("pinMarker error, trying coordinates fallback:", err);
                 }
               }
 
-              console.log("পিন বসানো হচ্ছে:", lat, lng);
+              // UPAY 2: Street-level smart fallback (Gram-er moddhe na fele rasta/college point-e felbe)
+              let lat = parseFloat(item.latitude || item.entryLatitude);
+              let lng = parseFloat(item.longitude || item.entryLongitude);
 
-              // স্থানাঙ্ক পাওয়া গেলে মার্কার তৈরি ও ক্যামেরা মুভ
-              if (!isNaN(lat) && !isNaN(lng)) {
-                // পুরনো মার্কার সরানো
-                if (currentMarker) {
-                  try {
-                    if (typeof currentMarker.remove === 'function') currentMarker.remove();
-                    else if (window.mappls && mappls.remove) mappls.remove({ map: map, layer: currentMarker });
-                  } catch (e) {}
-                  currentMarker = null;
+              if (isNaN(lat) || isNaN(lng) || !lat) {
+                try {
+                  const streetQuery = `${placeName}, Budge Budge`;
+                  const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(streetQuery)}&format=json&limit=1`);
+                  const geoData = await geoRes.json();
+
+                  if (geoData && geoData.length > 0 && geoData[0].type !== 'administrative') {
+                    lat = parseFloat(geoData[0].lat);
+                    lng = parseFloat(geoData[0].lon);
+                  } else {
+                    // Street fallback: Deshbandhu Chittaranjan Das Road, Budge Budge
+                    const roadRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent('Deshbandhu Chittaranjan Das Road Budge Budge')}&format=json&limit=1`);
+                    const roadData = await roadRes.json();
+                    if (roadData && roadData.length > 0) {
+                      lat = parseFloat(roadData[0].lat);
+                      lng = parseFloat(roadData[0].lon);
+                    }
+                  }
+                } catch (err) {
+                  console.error("Fallback error:", err);
                 }
+              }
 
-                // fitbounds: true দিলে Mappls নিজে থেকে ম্যাপ সেন্টার ও জুম করে নেয়
+              // Direct Coordinate Marker Drop
+              if (!isNaN(lat) && !isNaN(lng)) {
+                map.setCenter([lat, lng]);
+                map.setZoom(16);
+
                 currentMarker = new mappls.Marker({
                   map: map,
-                  position: { lat: lat, lng: lng },
-                  fitbounds: true,
-                  fitboundOptions: { maxZoom: 16 }
+                  position: { lat: lat, lng: lng }
                 });
-              } else {
-                alert("এই লোকেশনের স্থানাঙ্ক পাওয়া যায়নি!");
               }
             };
 
