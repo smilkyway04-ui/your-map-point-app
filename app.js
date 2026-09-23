@@ -4,22 +4,18 @@ let debounceTimer = null;
 
 // ১. Mappls ম্যাপ শুরু করা
 function initMap() {
-  if (map) return;
-
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // বজবজ / দক্ষিণ ২৪ পরগণা কেন্দ্রিক ভিউ
+    center: [22.4827, 88.1815], // বজবজ এলাকা
     zoom: 12
-  });
-
-  map.on('load', () => {
-    setupDirectSearch();
   });
 }
 
-// ২. সরাসরি সার্চ ইঞ্জিন (কোনো টোকেন বা প্লাগইন এরর ছাড়া)
-function setupDirectSearch() {
+// ২. সরাসরি সার্চ ইঞ্জিন (কোনো টোকেন ঝামেলা ছাড়া)
+function setupSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
+
+  if (!searchInput || !suggestBox) return;
 
   searchInput.addEventListener('input', (e) => {
     const query = e.target.value.trim();
@@ -33,28 +29,18 @@ function setupDirectSearch() {
 
     debounceTimer = setTimeout(async () => {
       try {
-        // '2' লিখলে যাতে রোমান 'II' দিয়েও সার্চ হয়
-        let searchQueries = [query];
-        if (/\b2\b/.test(query)) {
-          searchQueries.push(query.replace(/\b2\b/g, 'II'));
+        let q = query;
+        if (/\b2\b/.test(q)) {
+          q = q.replace(/\b2\b/g, 'II');
         }
 
-        let results = [];
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' West Bengal')}&format=json&countrycodes=in&limit=5`;
+        const res = await fetch(url);
+        const data = await res.json();
 
-        for (let q of searchQueries) {
-          const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q + ' West Bengal')}&format=json&countrycodes=in&limit=5`;
-          const res = await fetch(url, { headers: { 'Accept-Language': 'en' } });
-          const data = await res.json();
-          if (data && data.length > 0) {
-            results = data;
-            break;
-          }
-        }
-
-        // যদি রেজাল্ট পাওয়া যায়, ড্রপডাউনে সাজিয়ে দেখানো
-        if (results.length > 0) {
+        if (data && data.length > 0) {
           suggestBox.innerHTML = '';
-          results.forEach(item => {
+          data.forEach(item => {
             const li = document.createElement('li');
             const name = item.display_name.split(',')[0];
             const sub = item.display_name.split(',').slice(1, 4).join(', ');
@@ -68,24 +54,23 @@ function setupDirectSearch() {
               searchInput.value = name;
               suggestBox.style.display = 'none';
 
-              // Mappls ম্যাপ ওই লোকেশনে নিয়ে যাওয়া
-              map.setCenter([lat, lng]);
-              map.setZoom(16);
+              // ম্যাপ ওই জায়গায় সরানো
+              if (map) {
+                map.setCenter([lat, lng]);
+                map.setZoom(15);
 
-              // আগের মার্কার থাকলে তা সরিয়ে ফেলা
-              if (currentMarker) {
-                if (typeof currentMarker.remove === 'function') {
-                  currentMarker.remove();
-                } else if (mappls.remove) {
-                  mappls.remove({ map: map, layer: currentMarker });
+                // আগের পিন থাকলে সরানো
+                if (currentMarker) {
+                  if (typeof currentMarker.remove === 'function') currentMarker.remove();
+                  else if (mappls.remove) mappls.remove({ map: map, layer: currentMarker });
                 }
-              }
 
-              // Mappls ম্যাপের ওপর নতুন মার্কার বসানো
-              currentMarker = new mappls.Marker({
-                map: map,
-                position: { lat: lat, lng: lng }
-              });
+                // নতুন পিন বসানো
+                currentMarker = new mappls.Marker({
+                  map: map,
+                  position: { lat: lat, lng: lng }
+                });
+              }
             };
 
             suggestBox.appendChild(li);
@@ -98,10 +83,10 @@ function setupDirectSearch() {
         console.error("Search error:", err);
         suggestBox.style.display = 'none';
       }
-    }, 300);
+    }, 250);
   });
 
-  // সার্চ বক্সের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ হওয়া
+  // সার্চের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করা
   document.addEventListener('click', (e) => {
     if (!searchInput.parentElement.contains(e.target)) {
       suggestBox.style.display = 'none';
@@ -109,10 +94,8 @@ function setupDirectSearch() {
   });
 }
 
-// ব্যাকআপ লোডার
-window.initMap = initMap;
-window.addEventListener('DOMContentLoaded', () => {
-  if (!map && typeof mappls !== 'undefined') {
-    initMap();
-  }
-});
+// পেজ রেডি হলে ম্যাপ ও সার্চ উভয়ই রান করবে
+window.onload = () => {
+  initMap();
+  setupSearch();
+};
