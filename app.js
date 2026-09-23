@@ -1,4 +1,4 @@
-// আপনার Cloudflare Worker URL
+// আপনার ক্লাউডফ্লেয়ার ওয়ার্কারের লিঙ্কটি এখানে রাখুন
 const PROXY_URL = "https://black-disk-ce55.smilkyway04.workers.dev/";
 
 let map = null;
@@ -10,14 +10,14 @@ window.initMap = function () {
   if (map) return;
 
   map = new mappls.Map('map', {
-    center: [22.4827, 88.1815], // বজবজ এলাকা
+    center: [22.4827, 88.1815], // বজবজ
     zoom: 12
   });
 
   setupMapplsOfficialSearch();
 };
 
-// ২. সার্চ ও ক্লিকে ম্যাপে যাওয়া
+// ২. অফিশিয়াল Mappls সার্চ ও লোকেশনে জাম্প করার লজিক
 function setupMapplsOfficialSearch() {
   const searchInput = document.getElementById('searchInput');
   const suggestBox = document.getElementById('suggestBox');
@@ -49,57 +49,54 @@ function setupMapplsOfficialSearch() {
 
             li.innerHTML = `<strong>${placeName}</strong><small>${placeAddress}</small>`;
 
-            // ক্লিকে নির্দিষ্ট জায়গায় যাওয়ার নিখুঁত লজিক
+            // ক্লিকের নিখুঁত ইভেন্ট
             li.onclick = () => {
-              console.log("Selected Item:", item);
+              console.log("Selected Item Data:", item);
 
               searchInput.value = placeName;
               suggestBox.style.display = 'none';
 
-              // অক্ষাংশ ও দ্রাঘিমাংশ সংগ্রহ
+              // ১. পুরনো মার্কার থাকলে সরানো
+              if (currentMarker) {
+                try {
+                  if (typeof currentMarker.remove === 'function') {
+                    currentMarker.remove();
+                  } else if (window.mappls && mappls.remove) {
+                    mappls.remove({ map: map, layer: currentMarker });
+                  }
+                } catch (err) {
+                  console.warn("Marker removal warning:", err);
+                }
+                currentMarker = null;
+              }
+
+              // ২. ডেটা থেকে মানগুলো সংগ্রহ করা
               const lat = parseFloat(item.latitude || item.entryLatitude);
               const lng = parseFloat(item.longitude || item.entryLongitude);
+              const eloc = item.eLoc || item.eloc;
 
-              console.log("Moving to:", lat, lng);
-
+              // পদ্ধতি ক: যদি রেজাল্টে সরাসরি Lat/Lng থাকে
               if (!isNaN(lat) && !isNaN(lng) && lat !== 0) {
-                // ১. সঠিক অর্ডারে ম্যাপকে স্মুথভাবে সেই জায়গায় নিয়ে যাওয়া [lng, lat]
-                if (map.flyTo) {
-                  map.flyTo({
-                    center: [lng, lat],
-                    zoom: 16,
-                    essential: true
-                  });
-                } else if (map.setCenter) {
-                  map.setCenter([lng, lat]);
-                  map.setZoom(16);
-                }
+                console.log("Moving via Coordinates:", lat, lng);
+                map.setCenter([lat, lng]);
+                map.setZoom(16);
 
-                // ২. আগের মার্কার থাকলে নিরাপদে সরানো
-                if (currentMarker) {
-                  try {
-                    if (typeof currentMarker.remove === 'function') {
-                      currentMarker.remove();
-                    } else if (window.mappls && mappls.remove) {
-                      mappls.remove({ map: map, layer: currentMarker });
-                    }
-                  } catch (e) {
-                    console.warn("Marker removal warning:", e);
-                  }
-                  currentMarker = null;
-                }
-
-                // ৩. নতুন মার্কার বসানো
-                try {
-                  currentMarker = new mappls.Marker({
-                    map: map,
-                    position: { lat: lat, lng: lng }
-                  });
-                } catch (err) {
-                  console.error("Marker error:", err);
-                }
+                currentMarker = new mappls.Marker({
+                  map: map,
+                  position: { lat: lat, lng: lng },
+                  fitbounds: true
+                });
+              } 
+              // পদ্ধতি খ: যদি Mappls-এর অফিশিয়াল eLoc পিন থাকে (সবচেয়ে কার্যকর)
+              else if (eloc) {
+                console.log("Moving via Mappls eLoc Pin:", eloc);
+                currentMarker = new mappls.Marker({
+                  map: map,
+                  position: { pin: eloc },
+                  fitbounds: true // এটি দিলে Mappls নিজে থেকেই ম্যাপ ওই জায়গায় জুম করে নেয়
+                });
               } else {
-                console.error("No valid coordinates found in this item:", item);
+                console.error("Neither Lat/Lng nor eLoc found in item:", item);
               }
             };
 
@@ -110,13 +107,13 @@ function setupMapplsOfficialSearch() {
           suggestBox.style.display = 'none';
         }
       } catch (err) {
-        console.error("Search error:", err);
+        console.error("Worker fetch error:", err);
         suggestBox.style.display = 'none';
       }
     }, 300);
   });
 
-  // সার্চ বক্সের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ করা
+  // সার্চ বক্সের বাইরে ক্লিক করলে ড্রপডাউন বন্ধ হওয়া
   document.addEventListener('click', (e) => {
     if (!searchInput.parentElement.contains(e.target)) {
       suggestBox.style.display = 'none';
